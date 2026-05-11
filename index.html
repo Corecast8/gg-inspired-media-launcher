@@ -229,7 +229,40 @@
       box-shadow: var(--shadow-card);
       animation: fadeUp 0.5s ease both;
       position: relative;
+      overflow: hidden;
     }
+
+    /* ===== Cosmic accent strip ===== Subtle top gradient + starfield
+       on each section-card. No labeled banners; just an integrated nod
+       to the cosmic palette so the launcher reads as one piece. */
+    .section-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 38px;
+      border-radius: 18px 18px 0 0;
+      background:
+        radial-gradient(ellipse 60% 100% at 50% 100%, rgba(232,150,80,0.22) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 100% at 50% 110%, rgba(248,196,90,0.30) 0%, transparent 60%),
+        radial-gradient(ellipse 80% 120% at 20% 30%, rgba(124,57,196,0.32) 0%, transparent 70%),
+        linear-gradient(180deg, rgba(31,14,63,0.0) 60%, rgba(58,23,104,0.30) 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .section-card::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 38px;
+      background-image:
+        radial-gradient(0.9px 0.9px at 18% 38%, rgba(255,255,255,0.55) 50%, transparent 100%),
+        radial-gradient(0.9px 0.9px at 62% 24%, rgba(232,213,255,0.55) 50%, transparent 100%),
+        radial-gradient(1.1px 1.1px at 84% 56%, rgba(255,255,255,0.50) 50%, transparent 100%);
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.7;
+    }
+    .section-card > * { position: relative; z-index: 1; }
 
     .section-head {
       display: flex;
@@ -237,6 +270,7 @@
       justify-content: space-between;
       margin-bottom: 12px;
       gap: 10px;
+      padding-top: 6px;
     }
     .section-label {
       font-size: 9px;
@@ -913,7 +947,7 @@
 
       <section class="section-card">
         <div class="section-head">
-          <div class="section-label">Smart Prompts</div>
+          <div class="section-label">Smart Prompts <span class="mode-tag">Faith-rooted</span></div>
           <div class="section-sub">Right tool · auto-routed</div>
         </div>
         <div class="prompt-list" id="promptList"></div>
@@ -1021,6 +1055,34 @@
       del(key)      { try { localStorage.removeItem('ggmi:' + key); } catch (e) {} }
     };
 
+    // ===== Clipboard helper =====
+    // Chrome shows "This file wants to see text and images copied to the
+    // clipboard" for navigator.clipboard.* on file:// origins because there's
+    // no persistable origin for the permission to attach to. The legacy
+    // execCommand('copy') route is synchronous, requires no permission, and
+    // works on every Chromium browser. On https:// (the published GitHub
+    // Pages site) the modern API is fine and we use it directly.
+    function copyToClipboard(text) {
+      if (location.protocol !== 'file:' && navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text).catch(() => copyViaTextarea(text));
+      }
+      return copyViaTextarea(text);
+    }
+    function copyViaTextarea(text) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;';
+        document.body.appendChild(ta);
+        ta.select();
+        ta.setSelectionRange(0, text.length);
+        const ok = document.execCommand('copy');
+        ta.remove();
+        return ok ? Promise.resolve() : Promise.reject();
+      } catch (e) { return Promise.reject(e); }
+    }
+
     // ESSENTIAL_GLYPHS = the 5 apps shown in Content Studio (essentials section)
     // Anything not in this list lands in the AI Tools section below.
     const ESSENTIAL_GLYPHS = ['loom', 'drive', 'gmail', 'youtube', 'loop'];
@@ -1042,17 +1104,15 @@
     ];
 
     const STANDARD_WORKFLOWS = [
-      { name: 'Start Recording',   desc: 'Launches the Loom desktop app',         glyph: 'record',    action: () => launchLoomApp() },
-      { name: 'Daily Devotion',    desc: 'Open YouVersion · Bible',               glyph: 'devotion',  action: () => window.open('https://www.bible.com/', '_blank', 'noopener') },
-      { name: 'Repurpose Hub',     desc: 'Loom + Claude · 3-format prompt',       glyph: 'repurpose', action: () => launchRepurposeHub() },
-      { name: 'My Channel',        desc: 'Open my YouTube channel',               glyph: 'channel',   action: () => window.open('https://www.youtube.com/channel/UC8sBtQc9sPlQ5SkyOUvq9QA', '_blank', 'noopener') },
-      { name: 'Inspiration Break', desc: 'Spotify · Deep Focus playlist',         glyph: 'inspire',   action: () => launchInspirationBreak() }
+      { name: 'Start Recording',   desc: 'Loom Desktop &middot; web fallback if not set up', glyph: 'record',    action: () => launchLoomApp() },
+      { name: 'Daily Devotion',    desc: 'Open YouVersion · Bible',                glyph: 'devotion',  action: () => window.open('https://www.bible.com/', '_blank', 'noopener') },
+      { name: 'My Channel',        desc: 'Open my YouTube channel',                glyph: 'channel',   action: () => window.open('https://www.youtube.com/channel/UC8sBtQc9sPlQ5SkyOUvq9QA', '_blank', 'noopener') },
+      { name: 'Inspiration Break', desc: 'Spotify · Deep Focus playlist',          glyph: 'inspire',   action: () => launchInspirationBreak() }
     ];
 
     const DEV_WORKFLOWS = [
-      { name: 'Design Day',       desc: 'Canva + Drive + Claude',              glyph: 'design',     action: () => openMany(['https://www.canva.com', 'https://drive.google.com', 'https://claude.ai']) },
-      { name: 'Claude Code',      desc: 'Try claude-code:// → VS Code',        glyph: 'claudecode', action: () => launchClaudeCode() },
-      { name: 'Claude Coworker',  desc: 'Open the Claude desktop app',         glyph: 'coworker',   action: () => launchClaudeCoworker() }
+      { name: 'Claude Code',      desc: 'Run from terminal · graceful explainer', glyph: 'claudecode', action: () => launchClaudeCode() },
+      { name: 'Claude Coworker',  desc: 'Open the Claude desktop app',            glyph: 'coworker',   action: () => launchClaudeCoworker() }
     ];
 
     // Smart Prompt routing.
@@ -1067,15 +1127,36 @@
     // having to paste anything. The handful of prompts that genuinely need a
     // non-pre-fill destination (e.g. Gemini for YouTube analysis) flag
     // `pasteRequired: true` so the UI shows a longer sticky paste reminder.
+    // TOPIC_BANK — themes lifted from Margie's Faith In Focus content plan.
+    const TOPIC_BANK = [
+      { theme: 'Refuge in God when the world feels unstable', anchor: 'Psalm 46', hook: 'Headlines, conflict, and shaking ground' },
+      { theme: 'God provides in scarcity', anchor: 'Matthew 14 · loaves &amp; fish', hook: 'Global hunger crisis · 318M people' },
+      { theme: 'God&rsquo;s nearness no matter the distance', anchor: 'Psalm 139', hook: 'Astronauts farther than ever from Earth' },
+      { theme: 'Remembering the forgotten', anchor: 'Matthew 25 · the least of these', hook: 'Migrants lost at sea · uncovered stories' },
+      { theme: 'Engraved on His palms', anchor: 'Isaiah 49:15-16', hook: 'When systems and funding fail' },
+      { theme: 'Faith and science together', anchor: 'Romans 1:20', hook: 'World Health Day · &ldquo;Stand with science&rdquo;' },
+      { theme: 'Grief and faith can coexist', anchor: 'Lamentations 3:22-23', hook: 'When you don&rsquo;t have answers, only questions' },
+      { theme: 'Power, love, and a sound mind over fear', anchor: '2 Timothy 1:7', hook: 'Headline anxiety and doomscrolling' },
+      { theme: 'Bread of Life for the spiritually starving', anchor: 'John 6:35', hook: 'A hunger food can&rsquo;t satisfy' },
+      { theme: 'God&rsquo;s throne above the chaos of nations', anchor: 'Psalm 2', hook: 'Wars, missiles, and rising tensions' },
+      { theme: 'Peace that surpasses understanding', anchor: 'Philippians 4:6-7', hook: 'Anxiety in a chaotic world' },
+      { theme: 'The Good Shepherd in the dark valley', anchor: 'Psalm 23', hook: 'Walking through hard seasons' }
+    ];
+
+    function pickRandomTopic() {
+      return TOPIC_BANK[Math.floor(Math.random() * TOPIC_BANK.length)];
+    }
+
     const DEFAULT_PROMPTS = [
       { icon: 'caption',    ai: 'chatgpt',                  text: 'Draft 3 social captions for my next post (warm, faith-rooted, on-brand for GG Inspired Media).' },
       { icon: 'reel',       ai: 'chatgpt',                  text: 'Brainstorm 10 short-form video ideas for this week themed around mercy, grace, and purpose.' },
-      { icon: 'outline',    ai: 'chatgpt', also: 'canva',   text: 'Outline a 5-minute Loom on a topic I&rsquo;ll paste in &mdash; with hook, three beats, and a closing call to action.' },
-      { icon: 'thumbnail',  ai: 'chatgpt', also: 'canva',   text: 'Build 5 thumbnail concepts relating to scriptures or motivation &mdash; randomize the themes, with text overlay ideas I can drop into a Canva template.' },
+      { icon: 'outline',    ai: 'chatgpt',                  text: 'Outline a 5-minute Loom on a topic I&rsquo;ll paste in &mdash; with hook, three beats, and a closing call to action.' },
+      { icon: 'slides',     ai: 'chatgpt',  randomizeTopic: true, text: 'Outline a 6-slide deck on this topic: &ldquo;{topic}&rdquo; (anchor: {anchor}). Title slide, 4 content slides, and a closing slide. Match my warm, faith-rooted GG Inspired Media voice &mdash; mercy, grace, purpose.' },
       { icon: 'youtube',    ai: 'gemini',  pasteRequired: true, text: 'Review the YouTube video I&rsquo;ll paste in (Gemini can read YouTube links directly) and outline its key themes &mdash; pull out scripture or real-world hooks I can reuse.' },
-      { icon: 'slides',     ai: 'copilot',                  text: 'Outline a 6-slide deck on a topic I&rsquo;ll paste in &mdash; title slide, 4 content slides, and a closing slide.' },
-      { icon: 'photo',      ai: 'chatgpt', also: 'adobe',   text: 'Walk me through enhancing a photo for high-impact posts &mdash; composition, lighting, and color tweaks I can apply in Adobe Express.' },
-      { icon: 'repurpose',  ai: 'chatgpt',                  text: 'Take this Loom transcript and turn it into a blog post, a carousel, and a thread.' }
+      { icon: 'thumbnail',  ai: 'chatgpt', also: 'canva',   showFirst: true, canvaConcepts: 'thumbnails', text: 'Build 5 thumbnail concepts around faith and current events &mdash; randomize the themes, with bold text overlay ideas I can drop into a Canva template.' },
+      { icon: 'design',     ai: 'chatgpt', also: 'canva',   showFirst: true, canvaConcepts: 'slides',     text: 'Suggest 5 slide-background visual concepts around &ldquo;grace, mercy, and refuge&rdquo; for a Canva deck &mdash; describe each as a one-line scene I can build (colors, mood, focal element).' },
+      { icon: 'photo',      ai: 'chatgpt', also: 'canva',   showFirst: true, canvaConcepts: 'social',     text: 'Give me 6 Instagram post visual ideas tied to my faith content plan &mdash; one-line scene description + suggested verse text overlay for each.' },
+      { icon: 'repurpose',  ai: 'chatgpt',                  text: 'Take my Loom transcript (I&rsquo;ll paste it next) and turn it into 3 formats: (1) a blog post, (2) a 5-slide carousel, (3) a 5-tweet X thread. Match my warm, faith-rooted GG Inspired Media voice &mdash; mercy, grace, purpose.' }
     ];
 
     const VERSES = [
@@ -1116,7 +1197,7 @@
     // The earlier passes (Office tiles, IG-language scrubs) have been folded
     // into v2 since v2 supersedes them entirely.
     // ----------------------------------------------------------------------
-    const MIGRATION_VERSION = 4;
+    const MIGRATION_VERSION = 5;
     const ranVersion = LS.get('migrationVersion', 0);
 
     // Helper used by every pass to keep the saved app list aligned with a target
@@ -1247,6 +1328,13 @@
 
       LS.set('migrationVersion', 4);
     }
+
+    if (ranVersion < 5) {
+      // v5 = Smart Prompts overhaul (randomizeTopic, showFirst/canvaConcepts).
+      state.prompts = JSON.parse(JSON.stringify(DEFAULT_PROMPTS));
+      LS.set('prompts', state.prompts);
+      LS.set('migrationVersion', 5);
+    }
     let shareDirHandle = null;
     let inboxDirHandle = null;
     let audioCtx = null;
@@ -1283,21 +1371,24 @@
       btn.title = n === 0 ? 'No tabs to close' : 'Close ' + n + ' tab' + (n === 1 ? '' : 's') + ' the launcher opened';
     }
     function clearOpenedTabs() {
-      const tabs = activeOpenedWindows();
-      let closed = 0;
-      tabs.forEach(w => {
-        try { w.close(); closed++; } catch (e) {}
-      });
-      // Some closes are async; give them a beat then sweep
+      const tabs    = activeOpenedWindows();
+      const tracked = tabs.length;
+      tabs.forEach(w => { try { w.close(); } catch (e) {} });
       setTimeout(() => {
-        openedWindows = openedWindows.filter(w => { try { return w && !w.closed; } catch (e) { return false; } });
+        const stillOpen = tabs.filter(w => { try { return w && !w.closed; } catch (e) { return false; } });
+        const closed    = tracked - stillOpen.length;
+        openedWindows   = openedWindows.filter(w => { try { return w && !w.closed; } catch (e) { return false; } });
         updateTabCount();
-      }, 300);
-      if (closed > 0) {
-        toast('Closed ' + closed + ' tab' + (closed === 1 ? '' : 's') + ' · Ctrl+Shift+W kills the rest', 'ok');
-      } else {
-        toast('Nothing tracked · Ctrl+Shift+W closes everything', 'warn');
-      }
+        if (tracked === 0) {
+          toast('No launcher tabs to close · Ctrl+W closes the active tab', 'warn');
+        } else if (stillOpen.length === 0) {
+          toast('Closed ' + closed + ' tab' + (closed === 1 ? '' : 's'), 'ok');
+        } else if (closed === 0) {
+          toast('Browser blocked the close · click each tab and press Ctrl+W', 'warn');
+        } else {
+          toast('Closed ' + closed + ' of ' + tracked + ' tabs · close the rest with Ctrl+W', 'warn');
+        }
+      }, 350);
     }
     setInterval(updateTabCount, 2500);
 
@@ -1341,29 +1432,109 @@
       } catch (e) { /* swallow */ }
     }
     function launchLoomApp() {
-      // Use the same hidden-anchor + visibility-detect pattern as the Office bridges.
-      // window.open('loom://...') is unreliable in current Chrome — the bare anchor
-      // click preserves the user gesture and engages the OS handler properly. If
-      // Loom desktop isn't installed we soft-fall to Loom Suite on the web.
-      launchProtocolWithFallback(
-        'loom://record',
-        'https://www.loom.com/looms/videos',
-        'Loom desktop'
-      );
+      // Loom Desktop IS installed at C:\\Users\\GGIns\\AppData\\Local\\Programs\\Loom\\Loom.exe
+      // but the loom:// protocol either isn't registered or Chrome's silent
+      // deny is blocking it. Workaround: a custom URL protocol
+      // (gglaunch://) registered via "Install Loom Launcher Protocol.reg"
+      // points directly at the .exe. After the one-time .reg install,
+      // clicking Start Recording fires Loom Desktop with zero browser
+      // gymnastics. If the user hasn't installed the .reg yet, the
+      // protocol fails silently and we fall back to the web library.
+      let handed = false;
+      const onHide = () => { if (document.hidden) handed = true; };
+      document.addEventListener('visibilitychange', onHide);
+      tryProtocol('gglaunch://loom');
+      const t = $('#toast');
+      t.innerHTML = 'Launching Loom Desktop · <a href="#" id="loomHelpLink" style="color:#fbbf24; text-decoration:underline; pointer-events:auto;">need help?</a>';
+      t.className = 'toast show ok';
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => { t.className = 'toast'; }, 6000);
+      setTimeout(() => {
+        const link = document.getElementById('loomHelpLink');
+        if (link) link.addEventListener('click', e => { e.preventDefault(); openLoomHelpModal(); });
+      }, 50);
+      // Fallback: if gglaunch:// didn't fire (no protocol registered yet,
+      // or Windows blocked the handoff), open Loom web after 1.8s.
+      setTimeout(() => {
+        document.removeEventListener('visibilitychange', onHide);
+        if (document.hidden) handed = true;
+        if (!handed) {
+          window.open('https://www.loom.com/me/videos', '_blank', 'noopener');
+          const t2 = $('#toast');
+          t2.innerHTML = 'Loom Desktop didn&rsquo;t respond &middot; opened web instead &middot; <a href="#" id="loomHelpLink2" style="color:#fbbf24; text-decoration:underline; pointer-events:auto;">setup help</a>';
+          t2.className = 'toast show warn';
+          clearTimeout(toast._t);
+          toast._t = setTimeout(() => { t2.className = 'toast'; }, 8000);
+          setTimeout(() => {
+            const link = document.getElementById('loomHelpLink2');
+            if (link) link.addEventListener('click', e => { e.preventDefault(); openLoomHelpModal(); });
+          }, 50);
+        }
+      }, 1800);
+    }
+    function openLoomHelpModal() {
+      const wrap = el('div');
+      wrap.innerHTML = `
+        <h2>Make Start Recording one-click</h2>
+        <div class="sub">Loom Desktop is installed on this PC, but Chrome won&rsquo;t fire the loom:// link directly. The fix is a tiny one-time setup that registers a custom shortcut.</div>
+        <div style="margin:14px 0; padding:14px; background: rgba(216,169,58,0.12); border:1px solid rgba(216,169,58,0.32); border-radius:10px;">
+          <div style="font-family:'Cormorant Garamond', serif; font-size:18px; color:#f0c956; margin-bottom:8px;">One-time setup (30 seconds)</div>
+          <div style="font-size:13px; opacity:.9; line-height:1.55;">
+            1. Open the project folder<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<code style="font-size:11px;">Documents\Claude\Projects\Content Creation Idea Support</code><br>
+            2. Double-click <b>Install Loom Launcher Protocol.reg</b><br>
+            3. Click <b>Yes</b> on the Windows warning (writes to your user profile, no admin needed)<br>
+            4. Reload this launcher &mdash; Start Recording now opens Loom Desktop instantly.
+          </div>
+        </div>
+        <div style="margin:10px 0 14px; padding:14px; background: rgba(232,213,255,0.06); border:1px solid rgba(232,213,255,0.18); border-radius:10px;">
+          <div style="font-family:'Cormorant Garamond', serif; font-size:16px; color:#e8d5ff; margin-bottom:6px;">Or pin a taskbar shortcut</div>
+          <div style="font-size:13px; opacity:.8; line-height:1.5;">
+            Right-click <b>Start Loom Recording.bat</b> in Downloads &rarr; Show more options &rarr; Send to &rarr; Desktop. Then right-click the new desktop shortcut &rarr; Pin to taskbar.
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px; margin-top:6px;">
+          <button class="btn primary" id="loomLibrary">Open Loom in browser now</button>
+          <button class="btn ghost"   id="loomInstall">Re-install Loom Desktop</button>
+          <button class="btn ghost"   id="loomCancel">Close</button>
+        </div>
+      `;
+      openModal(wrap);
+      $('#loomLibrary').addEventListener('click', () => { window.open('https://www.loom.com/me/videos', '_blank', 'noopener'); closeModal(); });
+      $('#loomInstall').addEventListener('click', () => { window.open('https://www.loom.com/desktop', '_blank', 'noopener'); closeModal(); });
+      $('#loomCancel').addEventListener('click', closeModal);
     }
     function launchClaudeCode() {
-      let triggered = false;
-      const onBlur = () => { triggered = true; };
-      window.addEventListener('blur', onBlur, { once: true });
-      tryProtocol('claude-code://');
-      toast('Launching Claude Code…');
-      setTimeout(() => {
-        window.removeEventListener('blur', onBlur);
-        if (!triggered) {
-          tryProtocol('vscode://');
-          toast('Falling back to VS Code', 'warn');
-        }
-      }, 1200);
+      // Claude Code is a terminal CLI — there is no `claude-code://` URL
+      // handler on Windows, so the old protocol attempt produced an error.
+      // Show a small explainer modal with the real launch paths.
+      const wrap = el('div');
+      wrap.innerHTML = `
+        <h2>Launch Claude Code</h2>
+        <div class="sub">Claude Code runs in a terminal &mdash; it&rsquo;s not a browser app, so the launcher can&rsquo;t click it open. Pick a path:</div>
+        <div style="display:flex; flex-direction:column; gap:10px; margin-top:14px;">
+          <button class="btn primary" id="ccTerminal">Open PowerShell &amp; copy command</button>
+          <button class="btn ghost" id="ccVscode">Try VS Code instead</button>
+          <button class="btn ghost" id="ccWeb">Open Claude on the web</button>
+        </div>
+        <div class="sub" style="margin-top:14px; opacity:.7;">In PowerShell, paste with Ctrl+V then press Enter. The command is: <code>claude</code></div>
+      `;
+      openModal(wrap);
+      $('#ccTerminal').addEventListener('click', () => {
+        copyToClipboard('claude');
+        tryProtocol('ms-cmd://');
+        toast('Command copied · paste into terminal (Ctrl+V)', 'ok');
+        closeModal();
+      });
+      $('#ccVscode').addEventListener('click', () => {
+        tryProtocol('vscode://');
+        toast('Launching VS Code…', 'ok');
+        closeModal();
+      });
+      $('#ccWeb').addEventListener('click', () => {
+        window.open('https://claude.ai/new', '_blank', 'noopener');
+        closeModal();
+      });
     }
     function launchClaudeCoworker() {
       let triggered = false;
@@ -1528,6 +1699,7 @@
         case 'repurpose': return wrap(`<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>`);
         case 'youtube':   return wrap(`<rect x="2" y="6" width="20" height="12" rx="3"/><path d="M10 9.5l5 2.5-5 2.5z" fill="currentColor" stroke="none"/>`);
         case 'photo':     return wrap(`<rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6 L9.5 4 L14.5 4 L16 6"/>`);
+        case 'design':    return wrap(`<circle cx="12" cy="12" r="9"/><path d="M9 16C9 16 10 9 12 9C13.6 9 14 11 13 13C12 15 10 16 10 16"/>`);
         default:          return wrap(`<circle cx="12" cy="12" r="9"/>`);
       }
     }
@@ -1682,39 +1854,31 @@
       } catch (e) { /* notification optional */ }
     }
 
-    function sendPrompt(i) {
-      const p = state.prompts[i];
-      if (!p) return;
+    // ===== Smart Prompt helpers =====
+    function promptToPlain(p, topic) {
       const tmp = document.createElement('div');
       tmp.innerHTML = p.text;
-      const plain = tmp.textContent || tmp.innerText || '';
+      let plain = tmp.textContent || tmp.innerText || '';
+      if (topic) {
+        plain = plain
+          .replace(/\{topic\}/g, topic.theme)
+          .replace(/\{anchor\}/g, (topic.anchor || '').replace(/&[a-z]+;/g, ' '))
+          .replace(/\{hook\}/g, topic.hook || '');
+      }
+      return plain;
+    }
 
+    function deliverPrompt(p, plain) {
       const dest     = AI_DESTINATIONS[p.ai] || AI_DESTINATIONS.chatgpt;
       const aiUrl    = dest.urlWithPrompt ? dest.urlWithPrompt(plain) : dest.home;
       const alsoDest = p.also && AI_DESTINATIONS[p.also];
-
-      // Order matters: open the workspace `also:` tool FIRST (background), then
-      // the AI tab LAST so it lands as the active foreground tab — that way you
-      // see your pre-filled prompt straight away instead of landing on Canva
-      // and assuming the integration broke. Both opens stay synchronous in the
-      // click handler so the user-gesture flag is preserved for popup-blockers.
       if (alsoDest) window.open(alsoDest.home, '_blank');
       window.open(aiUrl, '_blank');
-
-      // Clipboard write is fire-and-forget (no await) so it doesn't yield the
-      // event loop and drop the user gesture before window.open runs. This is
-      // the backup for tools without ?q= pre-fill — the prompt is one Ctrl+V
-      // away once you're in Gemini/Claude/Canva/Adobe.
-      navigator.clipboard.writeText(plain).catch(() => {});
-
-      // Dev-mode log makes it obvious what URL we built, in case a prompt
-      // looks like it's not landing in the AI's input next time.
+      copyToClipboard(plain);
       if (state.devMode) {
         console.log('[smart prompt]', dest.label, '→', aiUrl);
         if (alsoDest) console.log('[smart prompt also]', alsoDest.label, '→', alsoDest.home);
       }
-
-      // Feedback toast — clearer wording so you know which tab to check.
       if (dest.urlWithPrompt) {
         toast(
           alsoDest
@@ -1725,6 +1889,174 @@
       } else {
         pasteReminder(dest.label);
       }
+    }
+
+    function shuffleInPlace(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function topicKeywords(topic) {
+      if (!topic) return 'scripture faith';
+      const stops = new Set(['with','this','that','your','from','into','over','onto','using','about',
+                             'when','where','what','have','been','will','they','their','them','then',
+                             'than','these','those','thing','things','feels','still','only','just',
+                             'cant','dont','isnt','arent','wasnt','didnt','some','more','most',
+                             'such','very','here','there','also','even','before','after','because',
+                             'while','during','through','without']);
+      const tmp = document.createElement('div');
+      tmp.innerHTML = (topic.theme || '') + ' ' + (topic.hook || '');
+      const text = (tmp.textContent || '').toLowerCase().replace(/[^a-z\s]/g, ' ');
+      const words = text.split(/\s+/).filter(w => w.length > 3 && !stops.has(w));
+      const uniq = Array.from(new Set(words));
+      shuffleInPlace(uniq);
+      return uniq.slice(0, 3).join(' ') || 'scripture faith';
+    }
+
+    function canvaSearchUrl(kind, seedTopic) {
+      const productHint = kind === 'thumbnails' ? 'youtube thumbnail'
+                       : kind === 'social'     ? 'instagram post'
+                       :                          'presentation';
+      const q = encodeURIComponent((productHint + ' ' + topicKeywords(seedTopic)).trim());
+      return 'https://www.canva.com/search?q=' + q;
+    }
+
+    function generateCanvaConcepts(kind) {
+      const t1 = pickRandomTopic(), t2 = pickRandomTopic(), t3 = pickRandomTopic();
+      let pool;
+      if (kind === 'thumbnails') {
+        pool = [
+          `Bold close-up · text: &ldquo;${t1.hook}&rdquo; · warm gold/amber overlay`,
+          `Split screen · headline photo on left, scripture verse on right (${t2.anchor})`,
+          `Single word in huge serif type · &ldquo;Refuge&rdquo; or &ldquo;Provided&rdquo; · soft sunrise gradient`,
+          `Hand-on-Bible photo · 3-word overlay: &ldquo;He still sees&rdquo; · navy + cream`,
+          `News-screenshot effect · scripture verse rubber-stamped over it (${t3.anchor})`,
+          `Tight portrait · question overlay: &ldquo;${t2.hook}?&rdquo; · soft warm light`,
+          `Sky photo with single bold word · &ldquo;${t1.theme.split(' ')[0]}&rdquo; · cinematic look`
+        ];
+      } else if (kind === 'slides') {
+        pool = [
+          `Open sky / mountain · low contrast · cream text panel for verse (${t1.anchor})`,
+          `Soft watercolor wash in muted indigo · centered single line of scripture (${t2.anchor})`,
+          `Black background · single golden olive branch · warm white serif quote`,
+          `Vintage page texture · handwritten-style verse · sepia tones`,
+          `Faded city skyline at dusk · scripture overlay in transparent panel`,
+          `Linen-textured background · simple cross silhouette · warm ivory text`,
+          `Sunlight-through-trees photo · low-saturation overlay · serif quote (${t3.anchor})`
+        ];
+      } else {
+        pool = [
+          `Carousel cover · question hook (&ldquo;${t1.hook}?&rdquo;) · neutral palette`,
+          `Verse card · ${t2.anchor} · warm cream + clay accent`,
+          `&ldquo;Saved this for you&rdquo; reel cover · close-up Bible page`,
+          `Reflection prompt · &ldquo;What headline kept you up?&rdquo; · navy + gold`,
+          `Behind-the-scenes photo of recording · caption: &ldquo;${t2.theme}&rdquo;`,
+          `Before/after testimony · split layout · soft pastel`,
+          `Single-word reel cover · &ldquo;${t3.theme.split(' ')[0]}&rdquo; · big serif type`
+        ];
+      }
+      shuffleInPlace(pool);
+      return { items: pool.slice(0, kind === 'social' ? 6 : 5), seedTopic: t1 };
+    }
+
+    function openTopicPicker(p) {
+      let topic = pickRandomTopic();
+      const wrap = el('div');
+      openModal(wrap);
+      const renderBody = () => {
+        wrap.innerHTML = `
+          <h2>Pick a topic for your slide deck</h2>
+          <div class="sub">Roll the dice on a faith-current-events theme from your content plan, or paste your own.</div>
+          <div style="margin:14px 0; padding:14px; background: rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.1); border-radius:10px;">
+            <div style="font-size:15px; font-weight:600; margin-bottom:6px;">${topic.theme}</div>
+            <div style="opacity:.75; font-size:13px;">Anchor: ${topic.anchor}</div>
+            <div style="opacity:.6; font-size:13px; margin-top:4px;">Hook: ${topic.hook}</div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:10px; margin-top:6px;">
+            <button class="btn primary" id="topicGo">Use this topic &rarr; ChatGPT</button>
+            <button class="btn ghost" id="topicReroll">Pick another</button>
+            <label for="ownTopic" style="margin-top:8px;">Or use my own:</label>
+            <input type="text" id="ownTopic" placeholder="Type your topic here…" />
+            <button class="btn ghost" id="topicOwn">Use my topic &rarr; ChatGPT</button>
+          </div>
+        `;
+        $('#topicGo').addEventListener('click', () => {
+          closeModal();
+          deliverPrompt(p, promptToPlain(p, topic));
+        });
+        $('#topicReroll').addEventListener('click', () => {
+          let next = pickRandomTopic();
+          let guard = 0;
+          while (next.theme === topic.theme && guard++ < 5) next = pickRandomTopic();
+          topic = next;
+          renderBody();
+        });
+        $('#topicOwn').addEventListener('click', () => {
+          const t = ($('#ownTopic').value || '').trim();
+          if (!t) { toast('Type a topic first', 'warn'); return; }
+          closeModal();
+          deliverPrompt(p, promptToPlain(p, { theme: t, anchor: 'your choice', hook: t }));
+        });
+      };
+      renderBody();
+    }
+
+    function openCanvaConceptsModal(p) {
+      const kind = p.canvaConcepts || 'thumbnails';
+      const { items: concepts, seedTopic } = generateCanvaConcepts(kind);
+      const plain = promptToPlain(p);
+      const wrap = el('div');
+      wrap.innerHTML = `
+        <h2>Visual concepts</h2>
+        <div class="sub">Fresh ideas grounded in &ldquo;${seedTopic.theme}&rdquo;. Pick one, then jump in.</div>
+        <ol style="margin:14px 0; padding-left:22px; line-height:1.55;">
+          ${concepts.map(c => `<li style="margin-bottom:8px;">${c}</li>`).join('')}
+        </ol>
+        <div style="display:flex; flex-direction:column; gap:10px; margin-top:6px;">
+          <button class="btn primary" id="cvCopyOpen">Copy ideas &amp; open matching Canva templates</button>
+          <button class="btn ghost"   id="cvGpt">More ideas (ChatGPT auto-fills)</button>
+          <button class="btn ghost"   id="cvReroll">Roll a different topic</button>
+          <button class="btn ghost"   id="cvJustCopy">Just copy the ideas</button>
+        </div>
+      `;
+      openModal(wrap);
+      const conceptsText = concepts.map((c, idx) => {
+        const tmp = document.createElement('div'); tmp.innerHTML = c;
+        return (idx + 1) + '. ' + (tmp.textContent || '');
+      }).join('\n');
+      $('#cvCopyOpen').addEventListener('click', () => {
+        copyToClipboard(conceptsText);
+        window.open(canvaSearchUrl(kind, seedTopic), '_blank', 'noopener');
+        toast('Concepts copied · Canva templates opening', 'ok');
+        closeModal();
+      });
+      $('#cvGpt').addEventListener('click', () => {
+        const dest = AI_DESTINATIONS.chatgpt;
+        window.open(dest.urlWithPrompt(plain), '_blank');
+        copyToClipboard(plain);
+        toast('Prompt → ChatGPT input', 'ok');
+        closeModal();
+      });
+      $('#cvReroll').addEventListener('click', () => {
+        closeModal();
+        openCanvaConceptsModal(p);
+      });
+      $('#cvJustCopy').addEventListener('click', () => {
+        copyToClipboard(conceptsText);
+        toast('Visual ideas copied to clipboard', 'ok');
+        closeModal();
+      });
+    }
+
+    function sendPrompt(i) {
+      const p = state.prompts[i];
+      if (!p) return;
+      if (p.randomizeTopic) { openTopicPicker(p);       return; }
+      if (p.showFirst)      { openCanvaConceptsModal(p); return; }
+      deliverPrompt(p, promptToPlain(p));
     }
 
     $('#editAppsBtn').addEventListener('click', () => {
